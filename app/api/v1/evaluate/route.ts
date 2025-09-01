@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { evaluateFlag, getDefaultWorkspaceId } from "@/lib/data"
+import { evaluateFlag } from "@/lib/data"
 
 export async function POST(req: Request) {
   try {
@@ -12,12 +12,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "key and unitId are required" }, { status: 400 })
     }
 
-    const workspaceId = await getDefaultWorkspaceId()
     const res = await evaluateFlag({
       key: body.key,
       unitId: body.unitId,
       attributes: body.attributes ?? {},
-      workspaceId
     })
 
     return NextResponse.json(res)

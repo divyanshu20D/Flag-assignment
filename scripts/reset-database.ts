@@ -25,22 +25,8 @@ async function resetDatabase() {
         await prisma.user.deleteMany({})
         console.log('   ✅ Cleared users')
 
-        await prisma.workspace.deleteMany({})
-        console.log('   ✅ Cleared workspaces')
-
         await prisma.verificationToken.deleteMany({})
         console.log('   ✅ Cleared verification tokens')
-
-        console.log('\n🏗️  Creating fresh workspace...')
-
-        // Create a single clean workspace
-        const workspace = await prisma.workspace.create({
-            data: {
-                name: 'Default Workspace',
-            },
-        })
-
-        console.log(`   ✅ Created workspace: ${workspace.name} (${workspace.id})`)
 
         console.log('\n🎉 Database reset complete!')
         console.log('\n📝 Next steps:')

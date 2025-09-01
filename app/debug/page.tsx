@@ -16,7 +16,6 @@ export default function DebugPage() {
                         <p><strong>User:</strong> {session.user?.email}</p>
                         <p><strong>Name:</strong> {session.user?.name}</p>
                         <p><strong>Role:</strong> {session.user?.role}</p>
-                        <p><strong>Workspace:</strong> {session.user?.workspace?.name}</p>
                     </div>
                 )}
                 <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">

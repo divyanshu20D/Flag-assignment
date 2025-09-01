@@ -32,8 +32,7 @@ export function initializeSocket(server: HTTPServer) {
                     id: true,
                     name: true,
                     email: true,
-                    role: true,
-                    workspaceId: true
+                    role: true
                 }
             })
 
@@ -53,60 +52,36 @@ export function initializeSocket(server: HTTPServer) {
 
     io.on('connection', (socket) => {
         const user = socket.data.user
-        console.log(`🔌 User ${user.email} connected to workspace ${user.workspaceId}`)
+        console.log(`🔌 User connected: ${user.email}`)
 
-        // Join workspace room
-        socket.join(`workspace:${user.workspaceId}`)
-
-        socket.on('disconnect', () => {
-            console.log(`🔌 User ${user.email} disconnected`)
-        })
-    })
-
-    // Subscribe to Redis flag events
-    setupRedisSubscription()
-
-    console.log('✅ Socket.IO server initialized successfully')
-    return io
-}
-
-function setupRedisSubscription() {
-    if (!io) {
-        console.log('❌ No Socket.IO instance for Redis subscription')
-        return
-    }
-
-    console.log('📡 Setting up Redis subscription...')
-
-    try {
-        // Subscribe to all workspace flag events
-        redisSub.psubscribe('flag_events:*')
-
-        redisSub.on('psubscribe', (pattern, count) => {
-            console.log(`✅ Subscribed to Redis pattern: ${pattern} (${count} subscriptions)`)
-        })
-
-        redisSub.on('pmessage', (pattern, channel, message) => {
-            try {
-                console.log(`📨 Received Redis message on ${channel}`)
-                const event: FlagEvent = JSON.parse(message)
-                const workspaceRoom = `workspace:${event.workspaceId}`
-
-                // Broadcast to all users in the workspace
-                io!.to(workspaceRoom).emit('flag_event', event)
-
-                console.log(`📡 Broadcasted ${event.type} for flag ${event.flag.key} to workspace ${event.workspaceId}`)
-            } catch (error) {
-                console.error('❌ Error processing Redis message:', error)
+        // Subscribe to flag events
+        redisSub.subscribe(CHANNELS.FLAG_EVENTS(), (err) => {
+            if (err) {
+                console.error('❌ Failed to subscribe to flag events:', err)
+            } else {
+                console.log('✅ Subscribed to flag events')
             }
         })
 
-        redisSub.on('error', (error) => {
-            console.error('❌ Redis subscription error:', error)
+        socket.on('disconnect', () => {
+            console.log(`🔌 User disconnected: ${user.email}`)
         })
-    } catch (error) {
-        console.error('❌ Failed to setup Redis subscription:', error)
-    }
+    })
+
+    // Handle flag events from Redis
+    redisSub.on('message', (channel, message) => {
+        if (channel === CHANNELS.FLAG_EVENTS()) {
+            try {
+                const event: FlagEvent = JSON.parse(message)
+                console.log(`📡 Broadcasting flag event: ${event.type}`)
+                io?.emit('flag_updated', event)
+            } catch (error) {
+                console.error('❌ Error parsing flag event:', error)
+            }
+        }
+    })
+
+    return io
 }
 
 export function getSocketIO() {

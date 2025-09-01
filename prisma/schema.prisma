@@ -10,31 +10,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users     User[]
-  flags     Flag[]
-  auditLogs AuditLog[]
-
-  @@map("workspaces")
-}
-
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String?
   image         String?
   role          UserRole  @default(READ_ONLY)
-  workspaceId   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   emailVerified DateTime?
 
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   auditLogs AuditLog[]
   accounts  Account[]
   sessions  Session[]
@@ -44,18 +29,15 @@ model User {
 
 model Flag {
   id           String   @id @default(cuid())
-  key          String
+  key          String   @unique
   defaultValue Boolean  @default(false)
   enabled      Boolean  @default(true)
-  workspaceId  String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   rules     Rule[]
   auditLogs AuditLog[]
 
-  @@unique([key, workspaceId])
   @@map("flags")
 }
 
@@ -75,16 +57,14 @@ model Rule {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  action      String
-  flagKey     String
-  userId      String
-  workspaceId String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  action    String
+  flagKey   String? // Make this optional to handle deleted flags
+  userId    String
+  createdAt DateTime @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  flag      Flag?     @relation(fields: [flagKey, workspaceId], references: [key, workspaceId], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flag Flag? @relation(fields: [flagKey], references: [key], onDelete: SetNull)
 
   @@map("audit_logs")
 }

@@ -18,13 +18,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Cache keys
 export const CACHE_KEYS = {
-    FLAG: (workspaceId: string, key: string) => `flag:${workspaceId}:${key}`,
-    FLAGS: (workspaceId: string) => `flags:${workspaceId}`,
+    FLAG: (key: string) => `flag:${key}`,
+    FLAGS: () => `flags`,
 } as const
 
 // Real-time event channels
 export const CHANNELS = {
-    FLAG_EVENTS: (workspaceId: string) => `flag_events:${workspaceId}`,
+    FLAG_EVENTS: () => `flag_events`,
 } as const
 
 // Event types
@@ -32,7 +32,6 @@ export type FlagEventType = 'flag_created' | 'flag_updated' | 'flag_deleted'
 
 export interface FlagEvent {
     type: FlagEventType
-    workspaceId: string
     flag: {
         key: string
         defaultValue: boolean
@@ -58,7 +57,7 @@ export interface FlagEvent {
 export async function publishFlagEvent(event: FlagEvent) {
     try {
         await redisPub.publish(
-            CHANNELS.FLAG_EVENTS(event.workspaceId),
+            CHANNELS.FLAG_EVENTS(),
             JSON.stringify(event)
         )
     } catch (error) {

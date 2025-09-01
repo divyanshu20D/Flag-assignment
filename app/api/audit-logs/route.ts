@@ -8,7 +8,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const flag = url.searchParams.get("flag") ?? undefined
 
-    const rows = await listAuditLogs(user.workspaceId, flag || undefined)
+    const rows = await listAuditLogs(flag || undefined)
 
     return NextResponse.json({ logs: rows })
   } catch (error) {

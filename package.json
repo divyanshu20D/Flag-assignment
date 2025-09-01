@@ -10,7 +10,10 @@
     "start": "tsx server.ts",
     "start:next": "next start",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "npx prisma migrate reset --force && npm run db:seed"
+    "db:reset": "npx prisma db push --force-reset && npm run db:seed",
+    "db:test": "tsx test-db.js",
+    "realtime:test": "tsx test-realtime.js",
+    "update-role": "tsx scripts/update-user-role.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

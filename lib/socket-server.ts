@@ -56,8 +56,7 @@ export function initializeSocket(server: HTTPServer) {
                     id: true,
                     name: true,
                     email: true,
-                    role: true,
-                    workspaceId: true
+                    role: true
                 }
             })
 
@@ -77,10 +76,7 @@ export function initializeSocket(server: HTTPServer) {
 
     io.on('connection', (socket) => {
         const user = socket.data.user
-        console.log(`✅ User ${user.email} connected to workspace ${user.workspaceId}`)
-
-        // Join workspace room
-        socket.join(`workspace:${user.workspaceId}`)
+        console.log(`✅ User ${user.email} connected`)
 
         socket.on('disconnect', () => {
             console.log(`❌ User ${user.email} disconnected`)
@@ -102,23 +98,22 @@ function setupRedisSubscription() {
 
     console.log('Setting up Redis subscription...')
 
-    // Subscribe to all workspace flag events
-    redisSub.psubscribe('flag_events:*')
+    // Subscribe to flag events
+    redisSub.subscribe(CHANNELS.FLAG_EVENTS())
 
-    redisSub.on('psubscribe', (pattern, count) => {
-        console.log(`✅ Subscribed to Redis pattern: ${pattern} (${count} subscriptions)`)
+    redisSub.on('subscribe', (channel, count) => {
+        console.log(`✅ Subscribed to Redis channel: ${channel} (${count} subscriptions)`)
     })
 
-    redisSub.on('pmessage', (pattern, channel, message) => {
+    redisSub.on('message', (channel, message) => {
         try {
             console.log(`📨 Received Redis message on ${channel}`)
             const event: FlagEvent = JSON.parse(message)
-            const workspaceRoom = `workspace:${event.workspaceId}`
 
-            // Broadcast to all users in the workspace except the user who made the change
-            io!.to(workspaceRoom).emit('flag_event', event)
+            // Broadcast to all connected users
+            io!.emit('flag_event', event)
 
-            console.log(`📡 Broadcasted ${event.type} for flag ${event.flag.key} to workspace ${event.workspaceId}`)
+            console.log(`📡 Broadcasted ${event.type} for flag ${event.flag.key}`)
         } catch (error) {
             console.error('Error processing Redis message:', error)
         }

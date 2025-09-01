@@ -109,16 +109,6 @@ function SettingsContent() {
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-              <div className="h-4 w-4 rounded bg-blue-500 flex items-center justify-center">
-                <div className="h-2 w-2 rounded bg-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Workspace ID</p>
-                <p className="text-sm text-gray-600 font-mono">{user.workspaceId}</p>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
