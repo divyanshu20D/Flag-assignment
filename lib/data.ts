@@ -4,19 +4,16 @@ import { Comparator } from "@prisma/client";
 import type { Flag, AuditLog } from "./types";
 
 export async function listFlags(): Promise<Flag[]> {
-  // Try cache first
   const cached = await redis.get(CACHE_KEYS.FLAGS());
   if (cached) {
     return JSON.parse(cached);
   }
 
-  // Fetch from database
   const dbFlags = await prisma.flag.findMany({
     include: { rules: true },
     orderBy: { key: "asc" },
   });
 
-  // Transform to match our Flag type
   const flags: Flag[] = dbFlags.map((flag) => ({
     key: flag.key,
     defaultValue: flag.defaultValue,
@@ -31,20 +28,17 @@ export async function listFlags(): Promise<Flag[]> {
     })),
   }));
 
-  // Cache for 5 minutes
   await redis.setex(CACHE_KEYS.FLAGS(), 300, JSON.stringify(flags));
 
   return flags;
 }
 
 export async function getFlag(key: string): Promise<Flag | undefined> {
-  // Try cache first
   const cached = await redis.get(CACHE_KEYS.FLAG(key));
   if (cached) {
     return JSON.parse(cached);
   }
 
-  // Fetch from database
   const dbFlag = await prisma.flag.findUnique({
     where: { key },
     include: { rules: true },
@@ -52,7 +46,6 @@ export async function getFlag(key: string): Promise<Flag | undefined> {
 
   if (!dbFlag) return undefined;
 
-  // Transform to match our Flag type
   const flag: Flag = {
     key: dbFlag.key,
     defaultValue: dbFlag.defaultValue,
@@ -67,14 +60,12 @@ export async function getFlag(key: string): Promise<Flag | undefined> {
     })),
   };
 
-  // Cache for 5 minutes
   await redis.setex(CACHE_KEYS.FLAG(key), 300, JSON.stringify(flag));
 
   return flag;
 }
 
 export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
-  // Check if flag exists
   const existing = await prisma.flag.findUnique({
     where: { key: next.key },
     include: { rules: true },
@@ -82,7 +73,6 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
 
   const isUpdate = !!existing;
 
-  // Track changes for real-time events
   const changes: FlagEvent["changes"] = {};
   if (existing) {
     if (existing.enabled !== next.enabled) {
@@ -94,7 +84,6 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
         to: next.defaultValue,
       };
     }
-    // Compare rules (simplified comparison)
     const existingRules = existing.rules.map((r) => ({
       attribute: r.attribute,
       comparator: r.comparator === Comparator.EQUALS ? "eq" : "in",
@@ -106,7 +95,6 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
     }
   }
 
-  // Upsert flag with rules
   const dbFlag = await prisma.flag.upsert({
     where: { key: next.key },
     update: {
@@ -140,13 +128,11 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
     include: { rules: true },
   });
 
-  // Get user details for event
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, name: true, email: true, role: true },
   });
 
-  // Create single audit log entry
   await prisma.auditLog.create({
     data: {
       action: isUpdate ? "Updated" : "Created",
@@ -155,11 +141,9 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
     },
   });
 
-  // Clear cache
   await redis.del(CACHE_KEYS.FLAG(next.key));
   await redis.del(CACHE_KEYS.FLAGS());
 
-  // Transform to match our Flag type
   const flag: Flag = {
     key: dbFlag.key,
     defaultValue: dbFlag.defaultValue,
@@ -174,7 +158,6 @@ export async function upsertFlag(next: Flag, userId: string): Promise<Flag> {
     })),
   };
 
-  // Publish real-time event
   if (user) {
     const event: FlagEvent = {
       type: isUpdate ? "flag_updated" : "flag_created",
@@ -199,7 +182,6 @@ export async function deleteFlag(
   key: string,
   userId: string
 ): Promise<boolean> {
-  // Check if flag exists
   const existing = await prisma.flag.findUnique({
     where: { key },
     include: { rules: true },
@@ -207,13 +189,11 @@ export async function deleteFlag(
 
   if (!existing) return false;
 
-  // Get user details for event
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, name: true, email: true, role: true },
   });
 
-  // Create audit log BEFORE deleting the flag
   await prisma.auditLog.create({
     data: {
       action: "Deleted",
@@ -222,16 +202,13 @@ export async function deleteFlag(
     },
   });
 
-  // Delete flag (rules will be deleted automatically due to CASCADE)
   await prisma.flag.delete({
     where: { key },
   });
 
-  // Clear cache
   await redis.del(CACHE_KEYS.FLAG(key));
   await redis.del(CACHE_KEYS.FLAGS());
 
-  // Publish real-time event
   if (user) {
     const event: FlagEvent = {
       type: "flag_deleted",
@@ -265,7 +242,7 @@ export async function deleteFlag(
 }
 
 export async function listAuditLogs(filterKey?: string): Promise<AuditLog[]> {
-  const where = filterKey ? { flagKey: filterKey } : { flagKey: { not: null } }; // Only show logs with valid flag keys
+  const where = filterKey ? { flagKey: filterKey } : { flagKey: { not: null } };
 
   const logs = await prisma.auditLog.findMany({
     where,
@@ -274,7 +251,7 @@ export async function listAuditLogs(filterKey?: string): Promise<AuditLog[]> {
       flag: true,
     },
     orderBy: { createdAt: "desc" },
-    take: 100, // Limit to last 100 logs
+    take: 100,
   });
 
   return logs.map((log) => ({
@@ -285,7 +262,7 @@ export async function listAuditLogs(filterKey?: string): Promise<AuditLog[]> {
       name: log.user.name,
       image: log.user.image,
     },
-    flagKey: log.flagKey || "Deleted Flag", // Handle null flagKey
+    flagKey: log.flagKey || "Deleted Flag",
     action: log.action as "Created" | "Updated" | "Deleted",
     enabled: log.flag?.enabled,
   }));
@@ -301,7 +278,6 @@ export async function evaluateFlag(input: {
   if (!flag.enabled)
     return { value: flag.defaultValue, reason: "Flag disabled" };
 
-  // Try to match rules in order; first match wins
   for (let i = 0; i < flag.rules.length; i++) {
     const r = flag.rules[i];
     const attr = (input.attributes?.[r.attribute] ?? "").toString().trim();
@@ -332,7 +308,7 @@ function percentFromString(s: string): number {
   for (let i = 0; i < s.length; i++) {
     const char = s.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash) % 100;
 }

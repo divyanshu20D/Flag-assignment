@@ -18,10 +18,6 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    /**
-     * Runs when a user signs in for the first time.
-     * This is where we can set up the user's initial data.
-     */
     async signIn({ user, account, profile }) {
       try {
         console.log("🔐 SignIn callback triggered:", {
@@ -30,7 +26,6 @@ export const authOptions: NextAuthOptions = {
           providerAccountId: account?.providerAccountId,
         });
 
-        // Check if user already exists in our database
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email! },
           include: {
@@ -42,14 +37,11 @@ export const authOptions: NextAuthOptions = {
           console.log(
             `🆕 New user signing in: ${user.email} via ${account?.provider}`
           );
-          // Don't create user here - let the Prisma adapter handle it
-          // We'll set the role in the jwt callback after the user is created
         } else {
           console.log(
             `✅ Existing user signing in: ${user.email} (role: ${existingUser.role}) via ${account?.provider}`
           );
 
-          // Check if this provider account is already linked
           const existingAccount = existingUser.accounts.find(
             (acc) => acc.provider === account?.provider
           );
@@ -58,23 +50,17 @@ export const authOptions: NextAuthOptions = {
             console.log(
               `🔗 Linking new ${account?.provider} account to existing user ${user.email}`
             );
-            // The Prisma adapter will handle linking the new account
           } else {
             console.log(`✅ Provider account already linked for ${user.email}`);
           }
         }
       } catch (error) {
         console.error("Error in signIn callback:", error);
-        // Don't block sign in on error
       }
 
       return true;
     },
 
-    /**
-     * Runs when the JWT is created/updated.
-     * Persist extra user info (id, role) in the token.
-     */
     async jwt({ token, user, trigger, session }) {
       console.log("🔄 JWT callback triggered:", {
         trigger,
@@ -84,12 +70,10 @@ export const authOptions: NextAuthOptions = {
         tokenRole: token?.role,
       });
 
-      // If this is a sign in, user object will be available
       if (user) {
         try {
           console.log("👤 User object available, fetching from DB...");
 
-          // Fetch user from DB
           const dbUser = await prisma.user.findUnique({
             where: { email: user.email! },
           });
@@ -101,10 +85,8 @@ export const authOptions: NextAuthOptions = {
               `✅ JWT updated for existing user ${dbUser.email}: role=${dbUser.role}`
             );
           } else {
-            // User was just created by the adapter, set default role
             console.log(`🆕 Setting default role for new user: ${user.email}`);
 
-            // Wait a bit for the adapter to finish creating the user
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const newDbUser = await prisma.user.findUnique({
@@ -126,12 +108,10 @@ export const authOptions: NextAuthOptions = {
           }
         } catch (error) {
           console.error("Error in jwt callback:", error);
-          // Set default role on error
           token.role = "READ_ONLY";
         }
       }
 
-      // If token already has user data, ensure it's preserved and up-to-date
       if (token.id && token.role) {
         try {
           const dbUser = await prisma.user.findUnique({
@@ -139,7 +119,6 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (dbUser) {
-            // Update token with latest role from DB
             token.role = dbUser.role;
             console.log(
               `🔄 Refreshed token data for user ${dbUser.email}: role=${dbUser.role}`
@@ -150,7 +129,6 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // CRITICAL FIX: If token has id but no role, fetch it from DB
       if (token.id && !token.role) {
         try {
           console.log("🔍 Token has ID but no role, fetching from DB...");
@@ -166,7 +144,6 @@ export const authOptions: NextAuthOptions = {
           }
         } catch (error) {
           console.error("Error fixing missing role:", error);
-          // Set default role as fallback
           token.role = "READ_ONLY";
         }
       }
@@ -180,10 +157,6 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    /**
-     * Runs whenever a session is checked.
-     * Expose custom fields from the token to the session.
-     */
     async session({ session, token }) {
       console.log("🔍 Session callback called", {
         token: token
@@ -206,7 +179,6 @@ export const authOptions: NextAuthOptions = {
           email: token?.email,
         });
 
-        // Fallback: try to get user data from database
         if (session.user?.email) {
           try {
             console.log("🔄 Attempting fallback user lookup from DB...");
@@ -241,15 +213,12 @@ export const authOptions: NextAuthOptions = {
   },
 
   session: {
-    strategy: "jwt", // ✅ use JWT sessions
+    strategy: "jwt",
   },
 
   debug: process.env.NODE_ENV === "development",
 };
 
-// -----------------
-// TypeScript Augmentation
-// -----------------
 declare module "next-auth" {
   interface Session {
     user: {

@@ -1,16 +1,16 @@
-"use client"
+"use client";
 
-import { useSession } from "next-auth/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { LogoutButton } from "@/components/auth/logout-button"
-import { ClientOnly } from "@/components/client-only"
-import { User, Mail, Shield, LogOut } from "lucide-react"
+import { useSession } from "next-auth/react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { LogoutButton } from "@/components/auth/logout-button";
+import { ClientOnly } from "@/components/client-only";
+import { User, Mail, Shield, LogOut } from "lucide-react";
 
 function SettingsContent() {
-  const { data: session, status } = useSession()
+  const { data: session, status } = useSession();
 
   if (status === "loading") {
     return (
@@ -28,7 +28,7 @@ function SettingsContent() {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (!session?.user) {
@@ -41,13 +41,17 @@ function SettingsContent() {
           <p className="text-sm text-gray-600">No user session found.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
-  const { user } = session
+  const { user } = session;
   const initials = user.name
-    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase()
-    : user.email[0].toUpperCase()
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+    : user.email[0].toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -63,7 +67,10 @@ function SettingsContent() {
           {/* Avatar and Basic Info */}
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={user.image || undefined} alt={user.name || user.email} />
+              <AvatarImage
+                src={user.image || undefined}
+                alt={user.name || user.email}
+              />
               <AvatarFallback className="text-lg">{initials}</AvatarFallback>
             </Avatar>
             <div className="space-y-1">
@@ -72,7 +79,10 @@ function SettingsContent() {
               </h3>
               <p className="text-sm text-gray-600">{user.email}</p>
               <div className="flex items-center gap-2">
-                <Badge variant={user.role === 'ADMIN' ? 'default' : 'secondary'} className="text-xs">
+                <Badge
+                  variant={user.role === "ADMIN" ? "default" : "secondary"}
+                  className="text-xs"
+                >
                   <Shield className="h-3 w-3 mr-1" />
                   {user.role}
                 </Badge>
@@ -88,14 +98,18 @@ function SettingsContent() {
               <User className="h-4 w-4 text-gray-500" />
               <div>
                 <p className="text-sm font-medium text-gray-900">Full Name</p>
-                <p className="text-sm text-gray-600">{user.name || "Not provided"}</p>
+                <p className="text-sm text-gray-600">
+                  {user.name || "Not provided"}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
               <Mail className="h-4 w-4 text-gray-500" />
               <div>
-                <p className="text-sm font-medium text-gray-900">Email Address</p>
+                <p className="text-sm font-medium text-gray-900">
+                  Email Address
+                </p>
                 <p className="text-sm text-gray-600">{user.email}</p>
               </div>
             </div>
@@ -105,7 +119,8 @@ function SettingsContent() {
               <div>
                 <p className="text-sm font-medium text-gray-900">Role</p>
                 <p className="text-sm text-gray-600">
-                  {user.role} {user.role === 'ADMIN' ? '(Full Access)' : '(Read Only)'}
+                  {user.role}{" "}
+                  {user.role === "ADMIN" ? "(Full Access)" : "(Read Only)"}
                 </p>
               </div>
             </div>
@@ -135,7 +150,7 @@ function SettingsContent() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 export default function SettingsPage() {
@@ -160,5 +175,5 @@ export default function SettingsPage() {
     >
       <SettingsContent />
     </ClientOnly>
-  )
+  );
 }

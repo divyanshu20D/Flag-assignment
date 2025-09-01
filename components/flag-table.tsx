@@ -1,12 +1,19 @@
-"use client"
+"use client";
 
-import useSWR, { mutate } from "swr"
-import Link from "next/link"
-import { useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Switch } from "@/components/ui/switch"
+import useSWR, { mutate } from "swr";
+import Link from "next/link";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,64 +24,68 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { useToast } from "@/hooks/use-toast"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { ConnectionStatus } from "@/components/connection-status"
-import type { Flag } from "@/lib/types"
-import type { FlagEvent } from "@/lib/redis"
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { ConnectionStatus } from "@/components/connection-status";
+import type { Flag } from "@/lib/types";
+import type { FlagEvent } from "@/lib/redis";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function FlagTable() {
-  const { data, isLoading } = useSWR<{ flags: Flag[] }>("/api/flags", fetcher)
-  const flags = data?.flags ?? []
-  const { toast } = useToast()
-  const { isAdmin } = useCurrentUser()
+  const { data, isLoading } = useSWR<{ flags: Flag[] }>("/api/flags", fetcher);
+  const flags = data?.flags ?? [];
+  const { toast } = useToast();
+  const { isAdmin } = useCurrentUser();
 
-  // Listen for real-time flag updates
   useEffect(() => {
     const handleFlagUpdate = (event: CustomEvent<FlagEvent>) => {
-      // Refresh the flags data when any flag event occurs
-      mutate("/api/flags")
-    }
+      mutate("/api/flags");
+    };
 
-    window.addEventListener('flag_updated', handleFlagUpdate as EventListener)
+    window.addEventListener("flag_updated", handleFlagUpdate as EventListener);
     return () => {
-      window.removeEventListener('flag_updated', handleFlagUpdate as EventListener)
-    }
-  }, [])
+      window.removeEventListener(
+        "flag_updated",
+        handleFlagUpdate as EventListener
+      );
+    };
+  }, []);
 
   async function toggleEnabled(flag: Flag, next: boolean) {
     if (!isAdmin) {
       toast({
         title: "Access denied",
         description: "Only administrators can modify flags.",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
     try {
-      const response = await fetch(`/api/flags/${encodeURIComponent(flag.key)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
-      })
+      const response = await fetch(
+        `/api/flags/${encodeURIComponent(flag.key)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: next }),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Failed to update flag')
+        throw new Error("Failed to update flag");
       }
 
-      mutate("/api/flags")
+      mutate("/api/flags");
       // @ts-ignore
-      window.dispatchEvent(new Event("flags:updated"))
+      window.dispatchEvent(new Event("flags:updated"));
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to update flag. Please try again.",
-        variant: "destructive"
-      })
+        variant: "destructive",
+      });
     }
   }
 
@@ -83,16 +94,19 @@ export function FlagTable() {
       toast({
         title: "Access denied",
         description: "Only administrators can delete flags.",
-        variant: "destructive"
-      })
-      return
+        variant: "destructive",
+      });
+      return;
     }
 
-    await fetch(`/api/flags/${encodeURIComponent(key)}`, { method: "DELETE" })
-    mutate("/api/flags")
+    await fetch(`/api/flags/${encodeURIComponent(key)}`, { method: "DELETE" });
+    mutate("/api/flags");
     // @ts-ignore
-    window.dispatchEvent(new Event("flags:updated"))
-    toast({ title: "Flag deleted", description: `“${key}” was removed successfully.` })
+    window.dispatchEvent(new Event("flags:updated"));
+    toast({
+      title: "Flag deleted",
+      description: `“${key}” was removed successfully.`,
+    });
   }
 
   return (
@@ -136,12 +150,18 @@ export function FlagTable() {
                         aria-label={`Toggle ${f.key}`}
                       />
                     </TableCell>
-                    <TableCell>{new Date(f.updatedAt).toLocaleString()}</TableCell>
+                    <TableCell>
+                      {new Date(f.updatedAt).toLocaleString()}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         {isAdmin && (
                           <Button asChild size="sm" variant="outline">
-                            <Link href={`/flags/${encodeURIComponent(f.key)}/edit`}>Edit</Link>
+                            <Link
+                              href={`/flags/${encodeURIComponent(f.key)}/edit`}
+                            >
+                              Edit
+                            </Link>
                           </Button>
                         )}
                         {isAdmin && (
@@ -153,9 +173,12 @@ export function FlagTable() {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete flag “{f.key}”?</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Delete flag “{f.key}”?
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete the flag and its rules.
+                                  This action cannot be undone. This will
+                                  permanently delete the flag and its rules.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -171,7 +194,9 @@ export function FlagTable() {
                           </AlertDialog>
                         )}
                         {!isAdmin && (
-                          <span className="text-xs text-gray-500">Read-only access</span>
+                          <span className="text-xs text-gray-500">
+                            Read-only access
+                          </span>
                         )}
                       </div>
                     </TableCell>
@@ -179,7 +204,10 @@ export function FlagTable() {
                 ))}
                 {flags.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-gray-900">
+                    <TableCell
+                      colSpan={5}
+                      className="text-center text-sm text-gray-900"
+                    >
                       No flags yet. Create your first flag.
                     </TableCell>
                   </TableRow>
@@ -190,5 +218,5 @@ export function FlagTable() {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

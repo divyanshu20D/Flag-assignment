@@ -1,89 +1,85 @@
-import { Server as SocketIOServer } from 'socket.io'
-import { Server as HTTPServer } from 'http'
-import { redisSub, CHANNELS, type FlagEvent } from './redis'
-import { prisma } from './prisma'
+import { Server as SocketIOServer } from "socket.io";
+import { Server as HTTPServer } from "http";
+import { redisSub, CHANNELS, type FlagEvent } from "./redis";
+import { prisma } from "./prisma";
 
-let io: SocketIOServer | null = null
+let io: SocketIOServer | null = null;
 
 export function initializeSocket(server: HTTPServer) {
-    if (io) {
-        console.log('Socket.IO already initialized')
-        return io
-    }
+  if (io) {
+    console.log("Socket.IO already initialized");
+    return io;
+  }
 
-    console.log('🚀 Initializing Socket.IO server...')
+  console.log("🚀 Initializing Socket.IO server...");
 
-    io = new SocketIOServer(server, {
-        cors: {
-            origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
-            methods: ["GET", "POST"]
+  io = new SocketIOServer(server, {
+    cors: {
+      origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      methods: ["GET", "POST"],
+    },
+    transports: ["websocket", "polling"],
+  });
+
+  io.use(async (socket, next) => {
+    try {
+      console.log("🔐 Socket connection attempt...");
+
+      const user = await prisma.user.findFirst({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
         },
-        transports: ['websocket', 'polling']
-    })
+      });
 
-    // Simplified authentication - just get first user for testing
-    io.use(async (socket, next) => {
-        try {
-            console.log('🔐 Socket connection attempt...')
+      if (!user) {
+        console.log("❌ No users found in database");
+        return next(new Error("No users found"));
+      }
 
-            // Get a default user for testing
-            const user = await prisma.user.findFirst({
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    role: true
-                }
-            })
+      console.log(`✅ Using user: ${user.email}`);
+      socket.data.user = user;
+      next();
+    } catch (error) {
+      console.error("❌ Socket authentication error:", error);
+      next(new Error("Authentication failed"));
+    }
+  });
 
-            if (!user) {
-                console.log('❌ No users found in database')
-                return next(new Error('No users found'))
-            }
+  io.on("connection", (socket) => {
+    const user = socket.data.user;
+    console.log(`🔌 User connected: ${user.email}`);
 
-            console.log(`✅ Using user: ${user.email}`)
-            socket.data.user = user
-            next()
-        } catch (error) {
-            console.error('❌ Socket authentication error:', error)
-            next(new Error('Authentication failed'))
-        }
-    })
+    redisSub.subscribe(CHANNELS.FLAG_EVENTS(), (err) => {
+      if (err) {
+        console.error("❌ Failed to subscribe to flag events:", err);
+      } else {
+        console.log("✅ Subscribed to flag events");
+      }
+    });
 
-    io.on('connection', (socket) => {
-        const user = socket.data.user
-        console.log(`🔌 User connected: ${user.email}`)
+    socket.on("disconnect", () => {
+      console.log(`🔌 User disconnected: ${user.email}`);
+    });
+  });
 
-        // Subscribe to flag events
-        redisSub.subscribe(CHANNELS.FLAG_EVENTS(), (err) => {
-            if (err) {
-                console.error('❌ Failed to subscribe to flag events:', err)
-            } else {
-                console.log('✅ Subscribed to flag events')
-            }
-        })
+  redisSub.on("message", (channel, message) => {
+    if (channel === CHANNELS.FLAG_EVENTS()) {
+      try {
+        const event: FlagEvent = JSON.parse(message);
+        console.log(`📡 Broadcasting flag event: ${event.type}`);
+        io?.emit("flag_updated", event);
+      } catch (error) {
+        console.error("❌ Error parsing flag event:", error);
+      }
+    }
+  });
 
-        socket.on('disconnect', () => {
-            console.log(`🔌 User disconnected: ${user.email}`)
-        })
-    })
-
-    // Handle flag events from Redis
-    redisSub.on('message', (channel, message) => {
-        if (channel === CHANNELS.FLAG_EVENTS()) {
-            try {
-                const event: FlagEvent = JSON.parse(message)
-                console.log(`📡 Broadcasting flag event: ${event.type}`)
-                io?.emit('flag_updated', event)
-            } catch (error) {
-                console.error('❌ Error parsing flag event:', error)
-            }
-        }
-    })
-
-    return io
+  return io;
 }
 
 export function getSocketIO() {
-    return io
+  return io;
 }
