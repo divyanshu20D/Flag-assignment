@@ -1,0 +1,140 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  flags     Flag[]
+  auditLogs AuditLog[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          UserRole  @default(READ_ONLY)
+  workspaceId   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  emailVerified DateTime?
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+  accounts  Account[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+model Flag {
+  id           String   @id @default(cuid())
+  key          String
+  defaultValue Boolean  @default(false)
+  enabled      Boolean  @default(true)
+  workspaceId  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rules     Rule[]
+  auditLogs AuditLog[]
+
+  @@unique([key, workspaceId])
+  @@map("flags")
+}
+
+model Rule {
+  id                String     @id @default(cuid())
+  attribute         String
+  comparator        Comparator
+  value             String
+  rolloutPercentage Int        @default(100)
+  flagId            String
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  flag Flag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@map("rules")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  flagKey     String
+  userId      String
+  workspaceId String
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flag      Flag?     @relation(fields: [flagKey, workspaceId], references: [key, workspaceId], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+enum UserRole {
+  ADMIN
+  READ_ONLY
+}
+
+enum Comparator {
+  EQUALS
+  IN
+}
+
+// NextAuth.js tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
