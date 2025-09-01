@@ -1,6 +1,7 @@
-version: '3.8'
+version: "3.8"
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15
     container_name: feature-flags-postgres
@@ -17,7 +18,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - feature-flags-network
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: feature-flags-redis
@@ -30,7 +34,49 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - feature-flags-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feature-flags-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/feature_flags
+      - REDIS_URL=redis://redis:6379
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=your-secret-key-change-in-production
+      - NEXTAUTH_GITHUB_ID=your-github-id
+      - NEXTAUTH_GITHUB_SECRET=your-github-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - feature-flags-network
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        npx prisma db push &&
+        echo 'Database ready! Starting application...' &&
+        npm run dev
+      "
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  feature-flags-network:
+    driver: bridge

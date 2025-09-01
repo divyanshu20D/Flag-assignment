@@ -13,7 +13,65 @@ A simplified feature flag management system built with Next.js, Prisma, and Redi
 
 ## Quick Start
 
-### 1. Setup Environment
+### Option 1: Docker (Recommended)
+
+The easiest way to get started is using Docker Compose, which will set up everything automatically:
+
+#### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- [Docker Compose](https://docs.docker.com/compose/install/) (usually comes with Docker Desktop)
+
+#### Start Everything with One Command
+
+**On Windows:**
+
+```cmd
+start.bat
+```
+
+**On macOS/Linux:**
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+**Or manually with Docker Compose:**
+
+```bash
+docker-compose up --build -d
+```
+
+This will:
+
+- 🐘 Start PostgreSQL database on port 5432
+- 🔴 Start Redis cache on port 6380
+- ⚡ Build and start the Next.js application on port 3000
+- 🔄 Automatically run database migrations
+- 🌐 Make the app available at http://localhost:3000
+
+#### View Logs
+
+```bash
+docker-compose logs -f
+```
+
+#### Stop Services
+
+```bash
+docker-compose down
+```
+
+#### Clean Up Everything (including data)
+
+```bash
+docker-compose down -v
+```
+
+### Option 2: Manual Setup
+
+#### 1. Setup Environment
 
 ```bash
 # Copy environment variables
@@ -22,13 +80,13 @@ cp .env.example .env
 # Fill in your OAuth credentials and database URLs
 ```
 
-### 2. Install Dependencies
+#### 2. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Setup Database
+#### 3. Setup Database
 
 ```bash
 # Reset and seed the database
@@ -38,7 +96,7 @@ npm run db:reset
 npm run db:seed
 ```
 
-### 4. Start Development Server
+#### 4. Start Development Server
 
 ```bash
 npm run dev
@@ -49,6 +107,7 @@ npm run dev
 ### Default Users
 
 The system comes with two default users:
+
 - **admin@example.com** - ADMIN role (can create/edit/delete flags)
 - **readonly@example.com** - READ_ONLY role (can only view flags)
 
@@ -65,6 +124,7 @@ npm run update-role user@example.com READ_ONLY
 ## API Endpoints
 
 ### Flags
+
 - `GET /api/flags` - List all flags
 - `POST /api/flags` - Create new flag (ADMIN only)
 - `GET /api/flags/[key]` - Get specific flag
@@ -72,9 +132,11 @@ npm run update-role user@example.com READ_ONLY
 - `DELETE /api/flags/[key]` - Delete flag (ADMIN only)
 
 ### Evaluation
+
 - `POST /api/v1/evaluate` - Evaluate flag for a user/context
 
 ### Audit Logs
+
 - `GET /api/audit-logs` - View audit history
 
 ## Real-Time Features
@@ -101,15 +163,19 @@ npx tsx scripts/check-users.ts
 ## Database Schema
 
 ### Users
+
 - `id`, `email`, `name`, `image`, `role`, `createdAt`, `updatedAt`
 
 ### Flags
+
 - `id`, `key`, `defaultValue`, `enabled`, `createdAt`, `updatedAt`
 
 ### Rules
+
 - `id`, `attribute`, `comparator`, `value`, `rolloutPercentage`, `flagId`
 
 ### Audit Logs
+
 - `id`, `action`, `flagKey`, `userId`, `createdAt`
 
 ## Development
