@@ -1,12 +1,14 @@
 {
-  "name": "my-v0-project",
+  "name": "my-flag-project",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "tsx server.ts",
+    "dev:next": "next dev",
     "lint": "next lint",
-    "start": "next start",
+    "start": "tsx server.ts",
+    "start:next": "next start",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "npx prisma migrate reset --force && npm run db:seed"
   },

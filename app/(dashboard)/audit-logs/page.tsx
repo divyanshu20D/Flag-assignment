@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useMemo, useState } from "react"
-import type { Flag } from "@/lib/types"
+import type { Flag, AuditLog } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -13,7 +13,7 @@ export default function AuditLogsPage() {
   const { data: flagsData } = useSWR<{ flags: Flag[] }>("/api/flags", fetcher)
   const [filter, setFilter] = useState<string>("all")
   const qs = useMemo(() => (filter !== "all" ? `?flag=${encodeURIComponent(filter)}` : ""), [filter])
-  const { data, isLoading } = useSWR<{ logs: any[] }>(`/api/audit-logs${qs}`, fetcher)
+  const { data, isLoading } = useSWR<{ logs: AuditLog[] }>(`/api/audit-logs${qs}`, fetcher)
 
   const logs = data?.logs ?? []
 
@@ -49,20 +49,46 @@ export default function AuditLogsPage() {
                   <TableHead>User</TableHead>
                   <TableHead>Flag Key</TableHead>
                   <TableHead>Action</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {logs.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell>{new Date(l.timestamp).toLocaleString()}</TableCell>
-                    <TableCell>{l.user}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{l.user.name || l.user.email}</span>
+                        {l.user.name && (
+                          <span className="text-xs text-gray-500">{l.user.email}</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{l.flagKey}</TableCell>
-                    <TableCell>{l.action}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${l.action === 'Created' ? 'bg-green-100 text-green-800' :
+                        l.action === 'Updated' ? 'bg-blue-100 text-blue-800' :
+                          l.action === 'Deleted' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                        }`}>
+                        {l.action}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {l.enabled !== undefined ? (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${l.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                          {l.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {logs.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-gray-900">
+                    <TableCell colSpan={5} className="text-center text-sm text-gray-900">
                       No logs to display.
                     </TableCell>
                   </TableRow>

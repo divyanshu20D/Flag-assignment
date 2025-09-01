@@ -1,5 +1,5 @@
 import { prisma } from './prisma'
-import { redis, CACHE_KEYS } from './redis'
+import { redis, CACHE_KEYS, publishFlagEvent, type FlagEvent } from './redis'
 import { Comparator } from '@prisma/client'
 import type { Flag, AuditLog } from "./types"
 
@@ -79,9 +79,31 @@ export async function getFlag(key: string, workspaceId: string): Promise<Flag | 
 export async function upsertFlag(next: Flag, workspaceId: string, userId: string): Promise<Flag> {
   const existing = await prisma.flag.findUnique({
     where: { key_workspaceId: { key: next.key, workspaceId } },
+    include: { rules: true }
   })
 
   const isUpdate = !!existing
+
+  // Track changes for real-time events
+  const changes: FlagEvent['changes'] = {}
+  if (existing) {
+    if (existing.enabled !== next.enabled) {
+      changes.enabled = { from: existing.enabled, to: next.enabled }
+    }
+    if (existing.defaultValue !== next.defaultValue) {
+      changes.defaultValue = { from: existing.defaultValue, to: next.defaultValue }
+    }
+    // Compare rules (simplified comparison)
+    const existingRules = existing.rules.map(r => ({
+      attribute: r.attribute,
+      comparator: r.comparator === Comparator.EQUALS ? 'eq' : 'in',
+      value: r.value,
+      rollout: r.rolloutPercentage
+    }))
+    if (JSON.stringify(existingRules) !== JSON.stringify(next.rules)) {
+      changes.rules = { from: existingRules, to: next.rules }
+    }
+  }
 
   // Upsert flag with rules
   const dbFlag = await prisma.flag.upsert({
@@ -116,7 +138,13 @@ export async function upsertFlag(next: Flag, workspaceId: string, userId: string
     include: { rules: true },
   })
 
-  // Create audit log
+  // Get user details for event
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true }
+  })
+
+  // Create single audit log entry
   await prisma.auditLog.create({
     data: {
       action: isUpdate ? 'Updated' : 'Created',
@@ -145,15 +173,39 @@ export async function upsertFlag(next: Flag, workspaceId: string, userId: string
     })),
   }
 
+  // Publish real-time event
+  if (user) {
+    await publishFlagEvent({
+      type: isUpdate ? 'flag_updated' : 'flag_created',
+      workspaceId,
+      flag,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      timestamp: new Date().toISOString(),
+      changes: isUpdate && Object.keys(changes).length > 0 ? changes : undefined
+    })
+  }
+
   return flag
 }
 
 export async function deleteFlag(key: string, workspaceId: string, userId: string): Promise<boolean> {
   const existing = await prisma.flag.findUnique({
     where: { key_workspaceId: { key, workspaceId } },
+    include: { rules: true }
   })
 
   if (!existing) return false
+
+  // Get user details for event
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true }
+  })
 
   await prisma.flag.delete({
     where: { key_workspaceId: { key, workspaceId } },
@@ -173,6 +225,36 @@ export async function deleteFlag(key: string, workspaceId: string, userId: strin
   await redis.del(CACHE_KEYS.FLAG(workspaceId, key))
   await redis.del(CACHE_KEYS.FLAGS(workspaceId))
 
+  // Publish real-time event
+  if (user) {
+    const deletedFlag: Flag = {
+      key: existing.key,
+      defaultValue: existing.defaultValue,
+      enabled: existing.enabled,
+      updatedAt: existing.updatedAt.toISOString(),
+      rules: existing.rules.map(rule => ({
+        id: rule.id,
+        attribute: rule.attribute,
+        comparator: rule.comparator === Comparator.EQUALS ? 'eq' : 'in',
+        value: rule.value,
+        rollout: rule.rolloutPercentage,
+      })),
+    }
+
+    await publishFlagEvent({
+      type: 'flag_deleted',
+      workspaceId,
+      flag: deletedFlag,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      timestamp: new Date().toISOString()
+    })
+  }
+
   return true
 }
 
@@ -182,7 +264,10 @@ export async function listAuditLogs(workspaceId: string, filterKey?: string): Pr
       workspaceId,
       ...(filterKey && { flagKey: filterKey }),
     },
-    include: { user: true },
+    include: {
+      user: true,
+      flag: true
+    },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })
@@ -190,9 +275,14 @@ export async function listAuditLogs(workspaceId: string, filterKey?: string): Pr
   return dbLogs.map(log => ({
     id: log.id,
     timestamp: log.createdAt.toISOString(),
-    user: log.user.email,
+    user: {
+      email: log.user.email,
+      name: log.user.name,
+      image: log.user.image,
+    },
     flagKey: log.flagKey,
-    action: log.action,
+    action: log.action as "Created" | "Updated" | "Deleted",
+    enabled: log.flag?.enabled,
   }))
 }
 

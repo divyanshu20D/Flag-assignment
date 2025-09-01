@@ -19,7 +19,12 @@ export type Flag = {
 export type AuditLog = {
   id: string
   timestamp: string
-  user: string
+  user: {
+    email: string
+    name: string | null
+    image: string | null
+  }
   flagKey: string
   action: "Created" | "Updated" | "Deleted"
+  enabled?: boolean
 }

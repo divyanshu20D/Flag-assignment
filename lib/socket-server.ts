@@ -1,0 +1,134 @@
+import { Server as SocketIOServer } from 'socket.io'
+import { Server as HTTPServer } from 'http'
+import { getToken } from 'next-auth/jwt'
+import { redisSub, CHANNELS, type FlagEvent } from './redis'
+import { prisma } from './prisma'
+
+let io: SocketIOServer | null = null
+
+export function initializeSocket(server: HTTPServer) {
+    if (io) {
+        console.log('Socket.IO already initialized')
+        return io
+    }
+
+    console.log('Initializing Socket.IO server...')
+
+    io = new SocketIOServer(server, {
+        cors: {
+            origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
+            methods: ["GET", "POST"]
+        },
+        transports: ['websocket', 'polling']
+    })
+
+    // Authentication middleware
+    io.use(async (socket, next) => {
+        try {
+            console.log('Socket authentication attempt...')
+            const sessionToken = socket.handshake.auth.sessionToken
+
+            if (!sessionToken) {
+                console.log('No session token provided')
+                return next(new Error('Session token required'))
+            }
+
+            // For now, let's skip authentication to test basic connection
+            console.log('Session token received, verifying...')
+
+            // Verify session token with NextAuth
+            const decoded = await getToken({
+                token: sessionToken,
+                secret: process.env.NEXTAUTH_SECRET!
+            })
+
+            if (!decoded || !decoded.id) {
+                console.log('Invalid session token')
+                return next(new Error('Invalid session'))
+            }
+
+            console.log('Session token valid, fetching user...')
+
+            // Fetch user details from database
+            const user = await prisma.user.findUnique({
+                where: { id: decoded.id as string },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    role: true,
+                    workspaceId: true
+                }
+            })
+
+            if (!user) {
+                console.log('User not found in database')
+                return next(new Error('User not found'))
+            }
+
+            console.log(`User authenticated: ${user.email}`)
+            socket.data.user = user
+            next()
+        } catch (error) {
+            console.error('Socket authentication error:', error)
+            next(new Error('Authentication failed'))
+        }
+    })
+
+    io.on('connection', (socket) => {
+        const user = socket.data.user
+        console.log(`✅ User ${user.email} connected to workspace ${user.workspaceId}`)
+
+        // Join workspace room
+        socket.join(`workspace:${user.workspaceId}`)
+
+        socket.on('disconnect', () => {
+            console.log(`❌ User ${user.email} disconnected`)
+        })
+    })
+
+    // Subscribe to Redis flag events
+    setupRedisSubscription()
+
+    console.log('✅ Socket.IO server initialized successfully')
+    return io
+}
+
+function setupRedisSubscription() {
+    if (!io) {
+        console.log('No Socket.IO instance for Redis subscription')
+        return
+    }
+
+    console.log('Setting up Redis subscription...')
+
+    // Subscribe to all workspace flag events
+    redisSub.psubscribe('flag_events:*')
+
+    redisSub.on('psubscribe', (pattern, count) => {
+        console.log(`✅ Subscribed to Redis pattern: ${pattern} (${count} subscriptions)`)
+    })
+
+    redisSub.on('pmessage', (pattern, channel, message) => {
+        try {
+            console.log(`📨 Received Redis message on ${channel}`)
+            const event: FlagEvent = JSON.parse(message)
+            const workspaceRoom = `workspace:${event.workspaceId}`
+
+            // Broadcast to all users in the workspace except the user who made the change
+            io!.to(workspaceRoom).emit('flag_event', event)
+
+            console.log(`📡 Broadcasted ${event.type} for flag ${event.flag.key} to workspace ${event.workspaceId}`)
+        } catch (error) {
+            console.error('Error processing Redis message:', error)
+        }
+    })
+
+    redisSub.on('error', (error) => {
+        console.error('Redis subscription error:', error)
+    })
+}
+
+export function getSocketIO() {
+    return io
+}
